@@ -25,6 +25,22 @@ export interface PracticeSession {
   retries?: RetryAttempt[];
 }
 
+export interface FeedbackScores {
+  fluency: number;
+  accuracy: number;
+  vocabulary: number;
+  professionalTone: number;
+}
+
+/** Shape returned by POST /api/sessions/:id/feedback */
+export interface ApiFeedbackResponse {
+  scores: FeedbackScores;
+  issues: string[];
+  rewrites: RewriteSuggestion[];
+  nextFocus: string;
+}
+
+/** Flat shape used in history/session records from the DB */
 export interface FeedbackReport {
   fluency: number;
   accuracy: number;

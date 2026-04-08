@@ -1,9 +1,22 @@
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com",
-});
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_client) {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "DEEPSEEK_API_KEY is not configured. Set it to enable AI feedback generation."
+      );
+    }
+    _client = new OpenAI({
+      apiKey,
+      baseURL: "https://api.deepseek.com",
+    });
+  }
+  return _client;
+}
 
 export interface FeedbackScores {
   fluency: number;
@@ -78,6 +91,7 @@ ${transcript}
 
 Please evaluate this transcript and provide structured feedback.`;
 
+  const client = getClient();
   const response = await client.chat.completions.create({
     model: "deepseek-chat",
     messages: [
@@ -95,15 +109,26 @@ Please evaluate this transcript and provide structured feedback.`;
 
   try {
     const parsed = JSON.parse(content) as FeedbackResult;
-    // Validate required fields
+    // Validate required fields and counts
     if (
       !parsed.scores ||
+      typeof parsed.scores.fluency !== "number" ||
+      typeof parsed.scores.accuracy !== "number" ||
+      typeof parsed.scores.vocabulary !== "number" ||
+      typeof parsed.scores.professionalTone !== "number" ||
       !Array.isArray(parsed.issues) ||
+      parsed.issues.length !== 3 ||
       !Array.isArray(parsed.rewrites) ||
+      parsed.rewrites.length !== 3 ||
       !parsed.nextFocus
     ) {
       throw new Error("Missing required fields");
     }
+    // Clamp scores to valid range
+    parsed.scores.fluency = Math.min(100, Math.max(0, Math.round(parsed.scores.fluency)));
+    parsed.scores.accuracy = Math.min(100, Math.max(0, Math.round(parsed.scores.accuracy)));
+    parsed.scores.vocabulary = Math.min(100, Math.max(0, Math.round(parsed.scores.vocabulary)));
+    parsed.scores.professionalTone = Math.min(100, Math.max(0, Math.round(parsed.scores.professionalTone)));
     return parsed;
   } catch {
     throw new Error("INVALID_FEEDBACK_FORMAT");

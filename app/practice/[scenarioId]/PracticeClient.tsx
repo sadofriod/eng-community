@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { FeedbackCard } from "@/components/FeedbackCard";
-import { Scenario, FeedbackReport, RetryResponse } from "@/types";
+import { Scenario, ApiFeedbackResponse, RetryResponse } from "@/types";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/types";
 
 type Phase =
@@ -27,7 +27,7 @@ export function PracticeClient({ scenario }: PracticeClientProps) {
   const [phase, setPhase] = useState<Phase>("ready");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
-  const [feedback, setFeedback] = useState<FeedbackReport | null>(null);
+  const [feedback, setFeedback] = useState<ApiFeedbackResponse | null>(null);
   const [retryTranscript, setRetryTranscript] = useState("");
   const [retryFeedback, setRetryFeedback] = useState<RetryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,30 +99,21 @@ export function PracticeClient({ scenario }: PracticeClientProps) {
     setPhase("retry_uploading");
 
     try {
+      // Send audio directly to /retry — it transcribes internally without
+      // overwriting the original session transcript
       const formData = new FormData();
       formData.append("audio", blob, `retry_${sessionId}.webm`);
 
-      const transcribeRes = await fetch(
-        `/api/sessions/${sessionId}/transcribe`,
-        { method: "POST", body: formData }
-      );
-      if (!transcribeRes.ok) {
-        const err = await transcribeRes.json();
-        throw new Error(err.error || "Transcription failed");
-      }
-      const { transcript: t } = await transcribeRes.json();
-      setRetryTranscript(t);
-
       const retryRes = await fetch(`/api/sessions/${sessionId}/retry`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: t }),
+        body: formData,
       });
       if (!retryRes.ok) {
         const err = await retryRes.json();
-        throw new Error(err.error || "Retry feedback failed");
+        throw new Error(err.error || "Retry failed");
       }
       const rf = await retryRes.json();
+      setRetryTranscript(rf.transcript || "");
       setRetryFeedback(rf);
       setPhase("retry_feedback");
     } catch (e) {
@@ -324,7 +315,7 @@ function LoadingIndicator({ phase }: { phase: string }) {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+      <div className="w-10 h-10 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
       <p className="text-gray-500 text-sm">{messages[phase] || "Loading…"}</p>
     </div>
   );

@@ -1,7 +1,7 @@
-import { FeedbackReport, RetryResponse } from "@/types";
+import { ApiFeedbackResponse, RetryResponse } from "@/types";
 
 interface FeedbackCardProps {
-  feedback: FeedbackReport | RetryResponse;
+  feedback: ApiFeedbackResponse | RetryResponse;
   title?: string;
   delta?: {
     fluency: number;
@@ -12,8 +12,7 @@ interface FeedbackCardProps {
 }
 
 export function FeedbackCard({ feedback, title, delta }: FeedbackCardProps) {
-  const scores =
-    "scores" in feedback ? feedback.scores : feedback;
+  const scores = feedback.scores;
   const issues = feedback.issues;
   const rewrites = feedback.rewrites;
   const nextFocus = feedback.nextFocus;

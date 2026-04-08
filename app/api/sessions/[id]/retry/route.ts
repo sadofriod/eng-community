@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateFeedback } from "@/lib/ai/feedback";
+import { transcribeAudio } from "@/lib/ai/transcribe";
 import { Prisma } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
@@ -21,11 +22,40 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   let transcript: string;
-  try {
-    const body = await request.json();
-    transcript = body.transcript || "";
-  } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+
+  // Accept either multipart audio (new approach) or JSON with pre-transcribed text
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "INVALID_AUDIO" }, { status: 400 });
+    }
+
+    const audioFile = formData.get("audio") as File | null;
+    if (!audioFile || audioFile.size === 0) {
+      return NextResponse.json({ error: "INVALID_AUDIO" }, { status: 400 });
+    }
+
+    try {
+      const buffer = Buffer.from(await audioFile.arrayBuffer());
+      const mimeType = audioFile.type || "audio/webm";
+      const filename = audioFile.name || `retry_${sessionId}.webm`;
+      const result = await transcribeAudio(buffer, filename, mimeType);
+      transcript = result.transcript;
+    } catch (error) {
+      console.error("Retry transcription failed:", error);
+      return NextResponse.json({ error: "TRANSCRIBE_FAILED" }, { status: 502 });
+    }
+  } else {
+    try {
+      const body = await request.json();
+      transcript = body.transcript || "";
+    } catch {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
   }
 
   if (!transcript.trim()) {
@@ -58,6 +88,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       ? feedback.scores.professionalTone - originalFeedback.professionalTone
       : 0;
 
+    // Store retry transcript and scores on RetryAttempt only — never overwrite PracticeSession.transcript
     const retry = await prisma.retryAttempt.create({
       data: {
         sessionId,
@@ -78,6 +109,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({
       retryId: retry.id,
+      transcript,
       scores: feedback.scores,
       issues: feedback.issues,
       rewrites: feedback.rewrites,

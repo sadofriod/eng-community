@@ -7,7 +7,8 @@ const DEFAULT_USER_ID = "user_guest";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const limit = parseQueryParam(searchParams, "limit", 20);
+  const rawLimit = parseQueryParam(searchParams, "limit", 20);
+  const limit = Math.min(Math.max(1, rawLimit), 100);
 
   try {
     const sessions = await prisma.practiceSession.findMany({

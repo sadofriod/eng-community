@@ -65,6 +65,7 @@ export async function GET(_request: NextRequest) {
         createdAt: { gte: weekAgo },
       },
       select: { nextFocus: true },
+      orderBy: { createdAt: "desc" },
       take: 10,
     });
     const topWeaknessTags = recentFeedback

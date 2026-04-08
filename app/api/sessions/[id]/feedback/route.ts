@@ -18,12 +18,34 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   let transcript: string;
-  let scenarioId: string;
 
   try {
     const body = await request.json();
-    transcript = body.transcript || session.transcript || "";
-    scenarioId = body.scenarioId || session.scenarioId;
+    const requestedTranscript = body?.transcript;
+    const requestedScenarioId = body?.scenarioId;
+
+    // Validate scenarioId if provided — it must match the session's scenario
+    if (requestedScenarioId !== undefined && requestedScenarioId !== null) {
+      if (typeof requestedScenarioId !== "string") {
+        return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      }
+      if (requestedScenarioId !== session.scenarioId) {
+        return NextResponse.json({ error: "SCENARIO_ID_MISMATCH" }, { status: 400 });
+      }
+    }
+
+    if (
+      requestedTranscript !== undefined &&
+      requestedTranscript !== null &&
+      typeof requestedTranscript !== "string"
+    ) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    transcript =
+      typeof requestedTranscript === "string"
+        ? requestedTranscript
+        : session.transcript || "";
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -43,6 +65,12 @@ export async function POST(request: NextRequest, { params }: Params) {
   });
 
   try {
+    // Persist the final transcript used for feedback (may differ if user edited it)
+    await prisma.practiceSession.update({
+      where: { id: sessionId },
+      data: { transcript },
+    });
+
     const feedback = await generateFeedback(
       transcript,
       scenario.title,
@@ -51,7 +79,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
 
     // Upsert feedback report
-    const report = await prisma.feedbackReport.upsert({
+    await prisma.feedbackReport.upsert({
       where: { sessionId },
       create: {
         sessionId,
