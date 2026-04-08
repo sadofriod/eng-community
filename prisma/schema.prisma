@@ -1,0 +1,95 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  sessions  PracticeSession[]
+  streaks   DailyStreak[]
+}
+
+model Scenario {
+  id              String   @id
+  title           String
+  category        String
+  prompt          String
+  targetPoints    Json
+  suggestedMinute Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  sessions        PracticeSession[]
+}
+
+model PracticeSession {
+  id             String   @id @default(cuid())
+  userId         String
+  scenarioId     String
+  status         String   @default("CREATED")
+  transcript     String?
+  audioRef       String?
+  summary        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id])
+  scenario       Scenario       @relation(fields: [scenarioId], references: [id])
+  feedbackReport FeedbackReport?
+  retries        RetryAttempt[]
+}
+
+model FeedbackReport {
+  id               String   @id @default(cuid())
+  sessionId        String   @unique
+  fluency          Int
+  accuracy         Int
+  vocabulary       Int
+  professionalTone Int
+  issues           Json
+  rewrites         Json
+  nextFocus        String
+  createdAt        DateTime @default(now())
+
+  session          PracticeSession @relation(fields: [sessionId], references: [id])
+}
+
+model RetryAttempt {
+  id              String   @id @default(cuid())
+  sessionId       String
+  transcript      String
+  audioRef        String?
+  deltaFluency    Int      @default(0)
+  deltaAccuracy   Int      @default(0)
+  deltaVocabulary Int      @default(0)
+  deltaTone       Int      @default(0)
+  fluency         Int      @default(0)
+  accuracy        Int      @default(0)
+  vocabulary      Int      @default(0)
+  professionalTone Int     @default(0)
+  issues          Json     @default("[]")
+  rewrites        Json     @default("[]")
+  nextFocus       String   @default("")
+  createdAt       DateTime @default(now())
+
+  session         PracticeSession @relation(fields: [sessionId], references: [id])
+}
+
+model DailyStreak {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
